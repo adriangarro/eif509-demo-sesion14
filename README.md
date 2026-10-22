@@ -180,7 +180,7 @@ cd ~/Documents/Claude/eif509-demo-sesion14 && TOKEN=$(curl -s -X POST http://loc
 unidades al mismo tiempo; ambas responden `200`:
 
 ```bash
-(for operador in A B; do curl -s -w "  <- operador $operador: %{http_code}\n" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}' & done; wait)
+(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 El inventario quedó en 2, aunque se vendieron 16 unidades:
@@ -225,7 +225,7 @@ docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponibl
 ```
 
 ```bash
-(for operador in A B; do curl -s -w "  <- operador $operador: %{http_code}\n" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}' & done; wait)
+(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 En la terminal 1, traigan el manejador del conflicto y muestren el cambio:
@@ -242,7 +242,7 @@ docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponibl
 ```
 
 ```bash
-(for operador in A B; do curl -s -w "  <- operador $operador: %{http_code}\n" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}' & done; wait)
+(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 **Paso 6 · Cierre con el Laboratorio 7.** Sin comandos (ver el paso 6
@@ -324,17 +324,18 @@ TOKEN=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: appli
 ```
 
 Y envíen dos ventas de 8 unidades del producto 1 (Teclado mecánico, 10
-unidades) al mismo tiempo. Los paréntesis ejecutan el bucle en una subshell,
-para que la terminal no muestre los mensajes de los procesos en segundo
-plano:
+unidades) al mismo tiempo. Cada venta corre en segundo plano (`&`) e imprime
+su respuesta en una sola línea; `wait` espera a las dos. Los paréntesis
+exteriores evitan que la terminal muestre los mensajes de los procesos en
+segundo plano. El orden de las líneas puede variar:
 
 ```bash
-(for operador in A B; do curl -s -w "  <- operador $operador: %{http_code}\n" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}' & done; wait)
+(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 ```text
-{"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  <- operador A: 200
-{"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  <- operador B: 200
+Operador A: {"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  (HTTP 200)
+Operador B: {"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  (HTTP 200)
 ```
 
 En la terminal 2, las dos ventas leyeron 10 y ninguna de las dos sentencias
@@ -492,12 +493,12 @@ docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponibl
 ```
 
 ```bash
-(for operador in A B; do curl -s -w "  <- operador $operador: %{http_code}\n" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}' & done; wait)
+(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 ```text
-{"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  <- operador A: 200
-{"timestamp":"2026-10-22T00:58:59.669+00:00","status":500,"error":"Internal Server Error","path":"/api/v1/productos/1/ventas"}  <- operador B: 500
+Operador A: {"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  (HTTP 200)
+Operador B: {"timestamp":"2026-10-22T01:06:57.976+00:00","status":500,"error":"Internal Server Error","path":"/api/v1/productos/1/ventas"}  (HTTP 500)
 ```
 
 El conflicto ya se detecta (en la terminal 2, las dos sentencias terminan en
@@ -523,8 +524,8 @@ ProblemDetail conflicto(ObjectOptimisticLockingFailureException e) {
 Reinicien la API, devuelvan el inventario a 10 y repitan las dos ventas:
 
 ```text
-{"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  <- operador A: 200
-{"type":"https://api.ejemplo.cr/errores/conflicto-de-concurrencia","title":"Conflicto de concurrencia","status":409,"detail":"Otra persona modificó este registro. Recargue los datos e intente de nuevo.","instance":"/api/v1/productos/1/ventas"}  <- operador B: 409
+Operador A: {"id":1,"nombre":"Teclado mecánico","precio":15000.00,"disponible":2}  (HTTP 200)
+Operador B: {"type":"https://api.ejemplo.cr/errores/conflicto-de-concurrencia","title":"Conflicto de concurrencia","status":409,"detail":"Otra persona modificó este registro. Recargue los datos e intente de nuevo.","instance":"/api/v1/productos/1/ventas"}  (HTTP 409)
 ```
 
 Y en la terminal 2, el conflicto queda registrado (A09):
