@@ -12,6 +12,11 @@
 #
 # En la plataforma, el despliegue automático por push está desactivado: solo
 # se despliega lo que pasó por este pipeline.
+#
+# Sesión 14: la demostración de esta semana se ejecuta en local, así que este
+# repositorio no tiene el secreto DEPLOY_HOOK. Si falta, desplegar lo informa y
+# termina sin error; con el secreto configurado, despliega igual que en la
+# Sesión 13.
 name: CI/CD
 
 on:
@@ -36,4 +41,11 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - run: curl -fsS -X POST "${{ secrets.DEPLOY_HOOK }}"
+      - env:
+          DEPLOY_HOOK: ${{ secrets.DEPLOY_HOOK }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "El repositorio no tiene el secreto DEPLOY_HOOK: no se despliega."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK"
