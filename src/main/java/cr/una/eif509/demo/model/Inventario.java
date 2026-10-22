@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 
@@ -28,10 +29,14 @@ public class Inventario {
     @Column(nullable = false)
     private BigDecimal precio;
 
-    // Sesión 14 · Punto de partida de la demostración: la entidad no tiene
-    // campo de versión. Si dos operadores leen el mismo producto y ambos
-    // guardan, la segunda escritura reemplaza a la primera sin que nadie lo
-    // note (actualización perdida, lámina 19).
+    // Sesión 14 · Bloqueo optimista (lámina 21): Hibernate incluye la versión
+    // en la condición de cada UPDATE y la incrementa:
+    //   UPDATE inventario SET disponible=?, ..., version=N+1 WHERE id=? AND version=N
+    // Si otra transacción ya modificó la fila, el UPDATE no afecta ninguna y
+    // se lanza ObjectOptimisticLockingFailureException en lugar de
+    // sobrescribir ese cambio (actualización perdida, lámina 19).
+    @Version
+    private Long version;
 
     protected Inventario() {
         // Constructor sin argumentos requerido por JPA.
