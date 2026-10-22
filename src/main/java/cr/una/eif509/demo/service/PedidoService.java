@@ -7,12 +7,15 @@ import cr.una.eif509.demo.excepcion.AccesoDenegadoException;
 import cr.una.eif509.demo.excepcion.PedidoNoExisteException;
 import cr.una.eif509.demo.excepcion.PedidoYaConfirmadoException;
 import cr.una.eif509.demo.excepcion.ReferenciaInvalidaException;
+import cr.una.eif509.demo.model.Cliente;
 import cr.una.eif509.demo.model.EstadoPedido;
 import cr.una.eif509.demo.model.Pedido;
 import cr.una.eif509.demo.repository.ClienteRepository;
 import cr.una.eif509.demo.repository.InventarioRepository;
 import cr.una.eif509.demo.repository.PedidoRepository;
 import cr.una.eif509.demo.seguridad.UsuarioActual;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 // de salida: la entidad JPA no cruza la frontera (Sesión 8).
 @Service
 public class PedidoService {
+
+    private static final Logger log = LoggerFactory.getLogger(PedidoService.class);
 
     private final PedidoRepository pedidos;
     private final ClienteRepository clientes;
@@ -52,12 +57,17 @@ public class PedidoService {
     // validado (@Valid en el controlador); aquí se aplican las reglas de
     // negocio: que el cliente y el producto existan, que haya existencias, y
     // el cálculo del total (precio × cantidad), que nunca envía el cliente.
+    //
+    // Sesión 14 · A01 Control de acceso roto: el clienteId llega en el
+    // cuerpo, así que un CLIENTE podría crear pedidos a nombre de otro. Se
+    // verifica que el cliente sea el usuario autenticado (o que sea ADMIN).
     @Transactional
-    public PedidoResumen crear(CrearPedidoRequest req) {
+    public PedidoResumen crear(CrearPedidoRequest req, UsuarioActual usuario) {
         // Cliente y producto llegan como referencias en el cuerpo: si no
         // existen, la petición es inválida (422), no la URL (404).
         var cliente = clientes.findById(req.clienteId())
                 .orElseThrow(() -> new ReferenciaInvalidaException("cliente", req.clienteId()));
+        verificarPropiedad(cliente, usuario, "crear un pedido del cliente " + req.clienteId());
         var producto = inventarios.findById(req.productoId())
                 .orElseThrow(() -> new ReferenciaInvalidaException("producto", req.productoId()));
 
@@ -77,9 +87,7 @@ public class PedidoService {
     public PedidoResumen obtener(Long pedidoId, UsuarioActual usuario) {
         var pedido = pedidos.findById(pedidoId)
                 .orElseThrow(() -> new PedidoNoExisteException(pedidoId));
-        if (!usuario.esAdmin() && !pedido.getCliente().getEmail().equals(usuario.correo())) {
-            throw new AccesoDenegadoException();   // -> 403
-        }
+        verificarPropiedad(pedido.getCliente(), usuario, "consultar el pedido " + pedidoId);
         return PedidoMapper.aResumen(pedido);
     }
 
@@ -104,9 +112,25 @@ public class PedidoService {
     // La transición de estado como caso de uso para la API: la acción de
     // negocio «confirmar» se expone como el subrecurso POST
     // /{id}/confirmacion y devuelve el DTO del recurso resultante.
+    //
+    // Sesión 14 · A01: confirmar modifica el pedido, el inventario y la
+    // factura; la propiedad se verifica igual que al consultarlo.
     @Transactional
-    public PedidoResumen confirmar(Long pedidoId) {
+    public PedidoResumen confirmar(Long pedidoId, UsuarioActual usuario) {
+        var pedido = pedidos.findById(pedidoId)
+                .orElseThrow(() -> new PedidoNoExisteException(pedidoId));
+        verificarPropiedad(pedido.getCliente(), usuario, "confirmar el pedido " + pedidoId);
         return PedidoMapper.aResumen(confirmarPedido(pedidoId));
+    }
+
+    // Un CLIENTE solo actúa sobre lo suyo; ADMIN, sobre todo. El acceso
+    // denegado se registra (A09: registrar los accesos denegados), sin
+    // contraseñas ni tokens.
+    private static void verificarPropiedad(Cliente cliente, UsuarioActual usuario, String accion) {
+        if (!usuario.esAdmin() && !cliente.getEmail().equals(usuario.correo())) {
+            log.warn("Acceso denegado: {} intentó {}", usuario.correo(), accion);
+            throw new AccesoDenegadoException();   // -> 403
+        }
     }
 
     // Sesión 7 · @Transactional en el método de servicio: la transacción

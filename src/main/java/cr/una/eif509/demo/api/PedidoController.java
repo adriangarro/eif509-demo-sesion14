@@ -59,13 +59,15 @@ public class PedidoController {
             @ApiResponse(responseCode = "201", description = "Pedido creado; la cabecera Location contiene la URL del recurso"),
             @ApiResponse(responseCode = "400", description = "Formato inválido: falló la validación de @Valid",
                     content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
+            @ApiResponse(responseCode = "403", description = "Un CLIENTE solo puede crear pedidos a su propio nombre",
+                    content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
             @ApiResponse(responseCode = "422", description = "Una regla de negocio rechazó el pedido: no hay existencias "
                     + "suficientes, o el cliente o el producto no existen",
                     content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class)))
     })
     @PostMapping
-    public ResponseEntity<PedidoResumen> crear(@Valid @RequestBody CrearPedidoRequest req) {
-        var resumen = service.crear(req);
+    public ResponseEntity<PedidoResumen> crear(@Valid @RequestBody CrearPedidoRequest req, Authentication auth) {
+        var resumen = service.crear(req, UsuarioActual.de(auth));
         return ResponseEntity
                 .created(URI.create("/api/v1/pedidos/" + resumen.id()))
                 .body(resumen);
@@ -112,6 +114,8 @@ public class PedidoController {
                     + "bitácora en una sola transacción: se completan todos los pasos o ninguno (Sesión 7).")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Pedido confirmado"),
+            @ApiResponse(responseCode = "403", description = "El pedido pertenece a otro cliente",
+                    content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
             @ApiResponse(responseCode = "404", description = "El pedido no existe",
                     content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
             @ApiResponse(responseCode = "409", description = "El pedido ya estaba confirmado",
@@ -121,7 +125,7 @@ public class PedidoController {
                     content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class)))
     })
     @PostMapping("/{id}/confirmacion")
-    public PedidoResumen confirmar(@PathVariable Long id) {
-        return service.confirmar(id);
+    public PedidoResumen confirmar(@PathVariable Long id, Authentication auth) {
+        return service.confirmar(id, UsuarioActual.de(auth));
     }
 }

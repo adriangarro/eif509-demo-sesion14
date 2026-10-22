@@ -51,6 +51,8 @@ class PedidoServiceTest {
 
     @InjectMocks PedidoService service;
 
+    static final UsuarioActual ADMIN = new UsuarioActual("admin@demo.cr", true);
+
     // Camino feliz: hay pedido, hay inventario -> se confirma y se factura.
     @Test
     void confirmaCuandoHayInventario() {
@@ -110,7 +112,7 @@ class PedidoServiceTest {
                 new Inventario("Teclado mecánico", 10, new BigDecimal("15000.00"))));
         when(pedidos.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var resumen = service.crear(new CrearPedidoRequest(1L, 1L, 2));
+        var resumen = service.crear(new CrearPedidoRequest(1L, 1L, 2), ADMIN);
 
         assertThat(resumen.total()).isEqualByComparingTo("30000.00");
         assertThat(resumen.estado()).isEqualTo(EstadoPedido.CREADO);
@@ -124,7 +126,7 @@ class PedidoServiceTest {
         when(inventarios.findById(3L)).thenReturn(Optional.of(
                 new Inventario("Silla ergonómica", 2, new BigDecimal("61000.00"))));
 
-        assertThatThrownBy(() -> service.crear(new CrearPedidoRequest(1L, 3L, 5)))
+        assertThatThrownBy(() -> service.crear(new CrearPedidoRequest(1L, 3L, 5), ADMIN))
                 .isInstanceOf(InventarioInsuficienteException.class);
 
         verify(pedidos, never()).save(any());
@@ -134,7 +136,7 @@ class PedidoServiceTest {
     void rechazaCrearParaUnClienteInexistente() {
         when(clientes.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.crear(new CrearPedidoRequest(99L, 1L, 1)))
+        assertThatThrownBy(() -> service.crear(new CrearPedidoRequest(99L, 1L, 1), ADMIN))
                 .isInstanceOf(ReferenciaInvalidaException.class);
 
         verify(pedidos, never()).save(any());
@@ -165,6 +167,31 @@ class PedidoServiceTest {
         var resumen = service.obtener(1L, new UsuarioActual("admin@demo.cr", true));
 
         assertThat(resumen.cliente()).isEqualTo("Ana Rojas");
+    }
+
+    // Sesión 14 · A01: el clienteId del cuerpo no autoriza a crear pedidos
+    // a nombre de otro, ni el id de la URL a confirmar el pedido de otro.
+    @Test
+    void unClienteNoPuedeCrearUnPedidoANombreDeOtro() {
+        when(clientes.findById(1L)).thenReturn(Optional.of(new Cliente("Ana Rojas", "ana@mail.com")));
+
+        assertThatThrownBy(() -> service.crear(new CrearPedidoRequest(1L, 1L, 1),
+                new UsuarioActual("luis@mail.com", false)))
+                .isInstanceOf(AccesoDenegadoException.class);
+
+        verify(pedidos, never()).save(any());
+    }
+
+    @Test
+    void unClienteNoPuedeConfirmarElPedidoDeOtro() {
+        var pedido = pedidoCon(1, 10);
+        when(pedidos.findById(1L)).thenReturn(Optional.of(pedido));
+
+        assertThatThrownBy(() -> service.confirmar(1L, new UsuarioActual("luis@mail.com", false)))
+                .isInstanceOf(AccesoDenegadoException.class);
+
+        assertThat(pedido.getProducto().getDisponible()).isEqualTo(10);
+        verify(facturas, never()).crear(any());
     }
 
     // Método auxiliar: construye un pedido de prueba con su producto en

@@ -61,7 +61,7 @@ class PedidoControllerTest {
 
     @Test
     void postValidoDevuelve201ConLocationYElDto() throws Exception {
-        when(service.crear(any())).thenReturn(RESUMEN);
+        when(service.crear(any(), any())).thenReturn(RESUMEN);
 
         mvc.perform(post("/api/v1/pedidos").with(ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -97,7 +97,7 @@ class PedidoControllerTest {
     // cuerpo estándar (RFC 9457).
     @Test
     void reglaDeNegocioDevuelve422EnFormatoProblemDetails() throws Exception {
-        when(service.crear(any())).thenThrow(
+        when(service.crear(any(), any())).thenThrow(
                 new InventarioInsuficienteException("Silla ergonómica", 2, 5));
 
         mvc.perform(post("/api/v1/pedidos").with(ADMIN)
@@ -127,7 +127,7 @@ class PedidoControllerTest {
 
     @Test
     void confirmarDosVecesDevuelve409() throws Exception {
-        when(service.confirmar(11L)).thenThrow(new PedidoYaConfirmadoException(11L));
+        when(service.confirmar(eq(11L), any())).thenThrow(new PedidoYaConfirmadoException(11L));
 
         mvc.perform(post("/api/v1/pedidos/11/confirmacion").with(ADMIN))
                 .andExpect(status().isConflict())

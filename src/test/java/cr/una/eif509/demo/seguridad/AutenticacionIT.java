@@ -96,6 +96,25 @@ class AutenticacionIT extends PostgresContainerBase {
                 .andExpect(status().isOk());
     }
 
+    // Sesión 14 · A01 en las acciones que modifican: la clienta Ana no puede
+    // confirmar el pedido 3 (de otro cliente) ni crear un pedido a nombre
+    // del cliente 2, aunque su token sea válido.
+    @Test
+    void unClienteNoPuedeConfirmarNiCrearPedidosDeOtro() throws Exception {
+        String cliente = bearer("cliente@demo.cr", "cliente123");
+
+        mvc.perform(post("/api/v1/pedidos/3/confirmacion").header("Authorization", cliente))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Acceso denegado"));
+
+        mvc.perform(post("/api/v1/pedidos").header("Authorization", cliente)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteId": 2, "productoId": 1, "cantidad": 1}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
     // CORS: la petición previa (OPTIONS) del navegador desde la SPA se
     // autoriza; la de un origen no configurado se rechaza.
     @Test
