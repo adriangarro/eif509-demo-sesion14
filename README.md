@@ -158,39 +158,43 @@ code -g src/test/java/cr/una/eif509/demo/repository/ConcurrenciaProductoIT.java:
 ```
 
 En la terminal 2, la API (el registro de SQL ya está activo en el perfil
-dev):
+dev). Esperen la línea `Started DemoApplication` antes de seguir:
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home && export JWT_SECRETO=$(openssl rand -base64 48) && cd ~/Documents/Claude/eif509-demo-sesion14 && ./gradlew bootRun
 ```
 
-En la terminal 3, el token del operador:
+En la terminal 3, el token del operador. Debe mostrar
+`Token obtenido: eyJhbGciOiJIUzI1NiJ9...`; si después de «Token obtenido:»
+no aparece nada, la API todavía no había arrancado: repitan el comando.
 
 ```bash
 cd ~/Documents/Claude/eif509-demo-sesion14 && TOKEN=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"correo": "admin@demo.cr", "clave": "admin123"}' | sed -E 's/.*"token":"([^"]+)".*/\1/') && echo "Token obtenido: ${TOKEN:0:20}..."
 ```
 
-**Paso 1 · La prueba pasa y el sistema está mal** (terminal 1):
+**Paso 1 · La prueba pasa y el sistema está mal** (terminal 1). Se ve
+`segundaActualizacionSimultaneaSeRechaza() SUCCESS`:
 
 ```bash
 ./gradlew test --tests '*ConcurrenciaProductoIT'
 ```
 
 **Opcional · La misma falla desde la API** (terminal 3). Dos ventas de 8
-unidades al mismo tiempo; ambas responden `200`:
+unidades al mismo tiempo; tardan 3 segundos y ambas terminan en `(HTTP 200)`:
 
 ```bash
 (for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
-El inventario quedó en 2, aunque se vendieron 16 unidades:
+El inventario quedó en `"disponible":2`, aunque se vendieron 16 unidades:
 
 ```bash
 curl -s http://localhost:8080/api/v1/productos/1 -H "Authorization: Bearer $TOKEN"; echo
 ```
 
 **Paso 2 · La prueba expresa la regla real** (terminal 1). Trae la versión
-final de la prueba, muestra el cambio y la ejecuta (falla):
+final de la prueba, muestra el cambio y la ejecuta. Se ve `FAILURE` y
+`java.lang.AssertionError at ConcurrenciaProductoIT.java:40`:
 
 ```bash
 git restore --source=main src/test/java/cr/una/eif509/demo/repository/ConcurrenciaProductoIT.java && git --no-pager diff && ./gradlew test --tests '*ConcurrenciaProductoIT'
@@ -198,34 +202,33 @@ git restore --source=main src/test/java/cr/una/eif509/demo/repository/Concurrenc
 
 **Paso 3 · `@Version` y la migración** (terminal 1). Trae la entidad con
 `@Version`, copia la migración preparada, muestra el cambio y ejecuta la
-prueba (pasa):
+prueba. Se ve `SUCCESS` y `BUILD SUCCESSFUL`:
 
 ```bash
 git restore --source=main src/main/java/cr/una/eif509/demo/model/Inventario.java && cp demo/V9__version_en_inventario.sql src/main/resources/db/migration/ && git --no-pager diff src/main/java && ./gradlew test --tests '*ConcurrenciaProductoIT'
 ```
 
-**Paso 4 · La sentencia UPDATE con la versión** (terminal 1):
+**Paso 4 · La sentencia UPDATE con la versión** (terminal 1). La última
+línea es `and version=?`:
 
 ```bash
 grep -A 10 "update" build/test-results/test/TEST-cr.una.eif509.demo.repository.ConcurrenciaProductoIT.xml
 ```
 
 **Paso 5 · Del 500 al 409.** En la terminal 2, detengan la API con `Ctrl+C`
-y vuelvan a iniciarla (Flyway aplica la V9 al arrancar):
+y vuelvan a iniciarla. Esperen `Started DemoApplication`; un poco antes
+aparece `Migrating schema "public" to version "9 - version en inventario"`:
 
 ```bash
 ./gradlew bootRun
 ```
 
-En la terminal 3, devuelvan el inventario a 10 y repitan las dos ventas: la
-segunda responde `500`:
+En la terminal 3, devuelvan el inventario a 10 y repitan las dos ventas en
+un solo comando. Se ve `UPDATE 1`, una venta con `(HTTP 200)` y la otra con
+`(HTTP 500)`:
 
 ```bash
-docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponible = 10 WHERE id = 1;"
-```
-
-```bash
-(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
+docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponible = 10 WHERE id = 1;" && (for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 En la terminal 1, traigan el manejador del conflicto y muestren el cambio:
@@ -234,15 +237,18 @@ En la terminal 1, traigan el manejador del conflicto y muestren el cambio:
 git restore --source=main src/main/java/cr/una/eif509/demo/api/ManejadorErrores.java && git --no-pager diff src/main/java/cr/una/eif509/demo/api/ManejadorErrores.java
 ```
 
-En la terminal 2, `Ctrl+C` y de nuevo `./gradlew bootRun`. En la terminal 3,
-el inventario a 10 y las dos ventas: la segunda responde `409`:
+En la terminal 2, `Ctrl+C` y de nuevo la API; esperen `Started
+DemoApplication`:
 
 ```bash
-docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponible = 10 WHERE id = 1;"
+./gradlew bootRun
 ```
 
+En la terminal 3, el mismo comando: ahora la otra venta termina en
+`(HTTP 409)` con el título `Conflicto de concurrencia`:
+
 ```bash
-(for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
+docker compose exec db psql -U dev -d eif509 -c "UPDATE inventario SET disponible = 10 WHERE id = 1;" && (for operador in A B; do (r=$(curl -s -w "  (HTTP %{http_code})" -X POST http://localhost:8080/api/v1/productos/1/ventas -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cantidad": 8}'); echo "Operador $operador: $r") & done; wait)
 ```
 
 **Paso 6 · Cierre con el Laboratorio 7.** Sin comandos (ver el paso 6
