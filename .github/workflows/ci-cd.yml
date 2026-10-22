@@ -1,0 +1,39 @@
+# Sesión 13 · El pipeline de integración y despliegue continuos (lámina 17).
+#
+# Dos trabajos:
+#   verificar  se ejecuta en cada push a main y en cada pull request:
+#              compila, ejecuta las pruebas unitarias y de integración
+#              (Testcontainers usa el Docker del runner), revisa el código
+#              con Checkstyle y verifica el umbral de cobertura.
+#   desplegar  solo corre si verificar terminó bien (needs) y si el cambio
+#              está en main (if). Llama al deploy hook de la plataforma, una
+#              URL que se guarda como secreto del repositorio (DEPLOY_HOOK) y
+#              nunca en este archivo.
+#
+# En la plataforma, el despliegue automático por push está desactivado: solo
+# se despliega lo que pasó por este pipeline.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - run: ./gradlew check
+
+  desplegar:
+    needs: verificar
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "${{ secrets.DEPLOY_HOOK }}"

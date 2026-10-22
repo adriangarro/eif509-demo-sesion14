@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  Sesión 13 · Análisis estático con Checkstyle (lámina 14).
+  Un conjunto pequeño de reglas que detectan errores comunes y descuidos
+  que suelen pasar inadvertidos en una revisión manual. Cualquier
+  incumplimiento hace fallar ./gradlew check y, con él, el pipeline.
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="error"/>
+
+    <!-- Formato: sin tabuladores y líneas de longitud razonable. -->
+    <module name="FileTabCharacter"/>
+    <module name="LineLength">
+        <property name="max" value="140"/>
+        <property name="ignorePattern" value="^(package|import) "/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- Importaciones: sin comodines, repetidas ni sin usar. -->
+        <module name="AvoidStarImport"/>
+        <module name="RedundantImport"/>
+        <module name="UnusedImports"/>
+
+        <!-- Errores comunes. -->
+        <module name="EmptyStatement"/>
+        <module name="EmptyCatchBlock"/>
+        <module name="EqualsHashCode"/>
+        <module name="StringLiteralEquality"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+        <module name="FallThrough"/>
+        <module name="OneStatementPerLine"/>
+        <module name="MultipleVariableDeclarations"/>
+        <module name="UpperEll"/>
+        <module name="ArrayTypeStyle"/>
+        <module name="NeedBraces"/>
+    </module>
+</module>
