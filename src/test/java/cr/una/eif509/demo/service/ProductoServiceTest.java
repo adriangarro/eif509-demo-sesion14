@@ -1,6 +1,7 @@
 package cr.una.eif509.demo.service;
 
 import cr.una.eif509.demo.dto.ProductoForm;
+import cr.una.eif509.demo.excepcion.InventarioInsuficienteException;
 import cr.una.eif509.demo.excepcion.ProductoDuplicadoException;
 import cr.una.eif509.demo.excepcion.ProductoNoExisteException;
 import cr.una.eif509.demo.model.Inventario;
@@ -30,6 +31,8 @@ import static org.mockito.Mockito.when;
 class ProductoServiceTest {
 
     @Mock InventarioRepository inventarios;
+
+    @Mock PausaEntreLeerYGuardar pausa;
 
     @InjectMocks ProductoService service;
 
@@ -98,5 +101,29 @@ class ProductoServiceTest {
         assertThatThrownBy(() -> service.obtener(999L)).isInstanceOf(ProductoNoExisteException.class);
         assertThatThrownBy(() -> service.actualizar(999L, new ProductoForm("X", BigDecimal.ONE, 1)))
                 .isInstanceOf(ProductoNoExisteException.class);
+    }
+
+    // Sesión 14 · La venta descuenta del inventario y guarda el producto.
+    @Test
+    void venderDescuentaLaCantidadDelInventario() {
+        var teclado = new Inventario("Teclado mecánico", 10, new BigDecimal("15000.00"));
+        when(inventarios.findById(1L)).thenReturn(Optional.of(teclado));
+
+        var vendido = service.vender(1L, 8);
+
+        assertThat(vendido.disponible()).isEqualTo(2);
+        verify(inventarios).saveAndFlush(teclado);
+    }
+
+    @Test
+    void noVendeMasDeLoQueHayEnInventario() {
+        var silla = new Inventario("Silla ergonómica", 2, new BigDecimal("61000.00"));
+        when(inventarios.findById(3L)).thenReturn(Optional.of(silla));
+
+        assertThatThrownBy(() -> service.vender(3L, 3))
+                .isInstanceOf(InventarioInsuficienteException.class);
+
+        assertThat(silla.getDisponible()).isEqualTo(2);
+        verify(inventarios, never()).saveAndFlush(any());
     }
 }

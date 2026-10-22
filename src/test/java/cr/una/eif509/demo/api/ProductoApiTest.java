@@ -21,6 +21,10 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -110,5 +114,44 @@ class ProductoApiTest {
         mvc.perform(get("/api/v1/productos/999").with(ADMIN))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Producto no encontrado"));
+    }
+
+    // Sesión 14 · La venta: 200 con el producto actualizado.
+    @Test
+    void ventaDevuelveElProductoConElInventarioActualizado() throws Exception {
+        when(service.vender(13L, 8))
+                .thenReturn(new ProductoResumen(13L, "Café Tarrazú 1 kg", new BigDecimal("9800.00"), 17));
+
+        mvc.perform(post("/api/v1/productos/13/ventas").with(ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"cantidad": 8}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disponible").value(17));
+    }
+
+    @Test
+    void unClienteNoPuedeVender() throws Exception {
+        mvc.perform(post("/api/v1/productos/13/ventas")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENTE")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"cantidad": 8}
+                                """))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void ventaSinCantidadDevuelve400() throws Exception {
+        mvc.perform(post("/api/v1/productos/13/ventas").with(ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.cantidad").value("Este campo es obligatorio."));
+
+        verify(service, never()).vender(anyLong(), anyInt());
     }
 }

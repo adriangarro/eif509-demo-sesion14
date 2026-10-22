@@ -2,6 +2,7 @@ package cr.una.eif509.demo.api;
 
 import cr.una.eif509.demo.dto.ProductoForm;
 import cr.una.eif509.demo.dto.ProductoResumen;
+import cr.una.eif509.demo.dto.VentaRequest;
 import cr.una.eif509.demo.service.ProductoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -76,5 +77,21 @@ public class ProductoApi {
     public ResponseEntity<ProductoResumen> crear(@Valid @RequestBody ProductoForm form) {
         var creado = service.crear(form);
         return ResponseEntity.created(URI.create("/api/v1/productos/" + creado.id())).body(creado);
+    }
+
+    // Sesión 14 · La operación con contención real del dominio: dos
+    // operadores pueden vender el mismo producto al mismo tiempo.
+    @Operation(summary = "Vender unidades de un producto",
+            description = "Descuenta la cantidad vendida del inventario del producto y devuelve el producto actualizado.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Venta registrada; el producto con su inventario actualizado"),
+            @ApiResponse(responseCode = "404", description = "El producto no existe",
+                    content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
+            @ApiResponse(responseCode = "422", description = "No hay inventario suficiente",
+                    content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class)))
+    })
+    @PostMapping("/{id}/ventas")
+    public ProductoResumen vender(@PathVariable Long id, @Valid @RequestBody VentaRequest venta) {
+        return service.vender(id, venta.cantidad());
     }
 }

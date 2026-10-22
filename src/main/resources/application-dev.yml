@@ -13,3 +13,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+# Sesión 14 · Solo para la demostración de concurrencia: cada venta espera 3
+# segundos entre leer el inventario y guardarlo, para que dos peticiones
+# simultáneas lean el mismo valor (ver service/PausaEntreLeerYGuardar).
+demo:
+  pausa-entre-leer-y-guardar: 3s

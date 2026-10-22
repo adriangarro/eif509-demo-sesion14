@@ -7,6 +7,8 @@ import cr.una.eif509.demo.excepcion.ProductoDuplicadoException;
 import cr.una.eif509.demo.excepcion.ProductoNoExisteException;
 import cr.una.eif509.demo.model.Inventario;
 import cr.una.eif509.demo.repository.InventarioRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -18,10 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductoService {
 
-    private final InventarioRepository inventarios;
+    private static final Logger log = LoggerFactory.getLogger(ProductoService.class);
 
-    public ProductoService(InventarioRepository inventarios) {
+    private final InventarioRepository inventarios;
+    private final PausaEntreLeerYGuardar pausa;
+
+    public ProductoService(InventarioRepository inventarios, PausaEntreLeerYGuardar pausa) {
         this.inventarios = inventarios;
+        this.pausa = pausa;
     }
 
     @Transactional(readOnly = true)
@@ -58,6 +64,23 @@ public class ProductoService {
             throw new ProductoDuplicadoException(nombre);
         }
         producto.actualizarDatos(nombre, form.getPrecio(), form.getDisponible());
+        return ProductoMapper.aResumen(producto);
+    }
+
+    // Sesión 14 · Un operador vende unidades de un producto: lee el
+    // inventario, descuenta y guarda, todo dentro de una transacción. Aun
+    // así, si dos operadores venden a la vez, ambos leen el mismo valor y la
+    // segunda escritura reemplaza a la primera (actualización perdida): una
+    // transacción no la evita.
+    @Transactional
+    public ProductoResumen vender(Long id, int cantidad) {
+        var producto = inventarios.findById(id)
+                .orElseThrow(() -> new ProductoNoExisteException(id));
+        log.info("Venta de {} unidades de «{}»: disponible leído = {}",
+                cantidad, producto.getProducto(), producto.getDisponible());
+        pausa.esperar();
+        producto.reservar(cantidad);
+        inventarios.saveAndFlush(producto);
         return ProductoMapper.aResumen(producto);
     }
 }
