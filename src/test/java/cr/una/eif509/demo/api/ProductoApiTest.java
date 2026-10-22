@@ -4,6 +4,7 @@ import cr.una.eif509.demo.config.SeguridadConfig;
 import cr.una.eif509.demo.dto.ProductoResumen;
 import cr.una.eif509.demo.excepcion.ProductoDuplicadoException;
 import cr.una.eif509.demo.excepcion.ProductoNoExisteException;
+import cr.una.eif509.demo.model.Inventario;
 import cr.una.eif509.demo.service.ProductoService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -129,6 +131,24 @@ class ProductoApiTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.disponible").value(17));
+    }
+
+    // Sesión 14 · El conflicto de concurrencia no es un 500: es un 409 con
+    // Problem Details y un mensaje que indica recargar los datos.
+    @Test
+    void ventaSimultaneaRechazadaDevuelve409() throws Exception {
+        when(service.vender(1L, 8)).thenThrow(new ObjectOptimisticLockingFailureException(Inventario.class, 1L));
+
+        mvc.perform(post("/api/v1/productos/1/ventas").with(ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"cantidad": 8}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Conflicto de concurrencia"))
+                .andExpect(jsonPath("$.detail").value(
+                        "Otra persona modificó este registro. Recargue los datos e intente de nuevo."));
     }
 
     @Test

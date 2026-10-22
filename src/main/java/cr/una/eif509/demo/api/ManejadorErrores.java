@@ -9,10 +9,13 @@ import cr.una.eif509.demo.excepcion.PedidoYaConfirmadoException;
 import cr.una.eif509.demo.excepcion.ProductoDuplicadoException;
 import cr.una.eif509.demo.excepcion.ProductoNoExisteException;
 import cr.una.eif509.demo.excepcion.ReferenciaInvalidaException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,6 +40,8 @@ import java.util.Map;
 @RestControllerAdvice(basePackageClasses = ManejadorErrores.class)
 @Profile("!sin-manejador")
 public class ManejadorErrores {
+
+    private static final Logger log = LoggerFactory.getLogger(ManejadorErrores.class);
 
     // type: una URI que identifica la clase de problema. No tiene que
     // corresponder a una página existente, aunque es buena práctica que
@@ -77,6 +82,20 @@ public class ManejadorErrores {
     ProblemDetail productoDuplicado(ProductoDuplicadoException e) {
         return problema(HttpStatus.CONFLICT, "Producto duplicado",
                 "producto-duplicado", e);
+    }
+
+    // Sesión 14 · 409 Conflict: otra persona modificó el registro entre la
+    // lectura y la escritura (bloqueo optimista, lámina 21). No es una falla
+    // del servidor: el cliente debe recargar los datos y decidir si repite
+    // la operación. El conflicto se registra (A09), sin datos sensibles.
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ProblemDetail conflicto(ObjectOptimisticLockingFailureException e) {
+        log.warn("Conflicto de concurrencia en {} con id {}", e.getPersistentClassName(), e.getIdentifier());
+        var pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "Otra persona modificó este registro. Recargue los datos e intente de nuevo.");
+        pd.setTitle("Conflicto de concurrencia");
+        pd.setType(URI.create(TIPOS + "conflicto-de-concurrencia"));
+        return pd;
     }
 
     // 401 Unauthorized: el correo o la clave no son correctos al iniciar sesión.

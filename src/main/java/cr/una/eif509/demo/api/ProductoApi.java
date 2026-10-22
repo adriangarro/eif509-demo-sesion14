@@ -87,6 +87,9 @@ public class ProductoApi {
             @ApiResponse(responseCode = "200", description = "Venta registrada; el producto con su inventario actualizado"),
             @ApiResponse(responseCode = "404", description = "El producto no existe",
                     content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
+            @ApiResponse(responseCode = "409", description = "Otra persona modificó el producto al mismo tiempo; "
+                    + "hay que recargar los datos e intentar de nuevo",
+                    content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class))),
             @ApiResponse(responseCode = "422", description = "No hay inventario suficiente",
                     content = @Content(mediaType = PROBLEMA, schema = @Schema(implementation = ProblemDetail.class)))
     })
