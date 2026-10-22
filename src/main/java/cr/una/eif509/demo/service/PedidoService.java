@@ -61,13 +61,21 @@ public class PedidoService {
     // Sesión 14 · A01 Control de acceso roto: el clienteId llega en el
     // cuerpo, así que un CLIENTE podría crear pedidos a nombre de otro. Se
     // verifica que el cliente sea el usuario autenticado (o que sea ADMIN).
+    // Para un CLIENTE, un clienteId ajeno y uno inexistente responden igual
+    // (403): así no puede averiguar qué identificadores existen.
     @Transactional
     public PedidoResumen crear(CrearPedidoRequest req, UsuarioActual usuario) {
+        var accion = "crear un pedido del cliente " + req.clienteId();
+        var cliente = clientes.findById(req.clienteId()).orElse(null);
+        if (cliente == null && !usuario.esAdmin()) {
+            denegar(usuario, accion);
+        }
         // Cliente y producto llegan como referencias en el cuerpo: si no
         // existen, la petición es inválida (422), no la URL (404).
-        var cliente = clientes.findById(req.clienteId())
-                .orElseThrow(() -> new ReferenciaInvalidaException("cliente", req.clienteId()));
-        verificarPropiedad(cliente, usuario, "crear un pedido del cliente " + req.clienteId());
+        if (cliente == null) {
+            throw new ReferenciaInvalidaException("cliente", req.clienteId());
+        }
+        verificarPropiedad(cliente, usuario, accion);
         var producto = inventarios.findById(req.productoId())
                 .orElseThrow(() -> new ReferenciaInvalidaException("producto", req.productoId()));
 
@@ -128,9 +136,13 @@ public class PedidoService {
     // contraseñas ni tokens.
     private static void verificarPropiedad(Cliente cliente, UsuarioActual usuario, String accion) {
         if (!usuario.esAdmin() && !cliente.getEmail().equals(usuario.correo())) {
-            log.warn("Acceso denegado: {} intentó {}", usuario.correo(), accion);
-            throw new AccesoDenegadoException();   // -> 403
+            denegar(usuario, accion);
         }
+    }
+
+    private static void denegar(UsuarioActual usuario, String accion) {
+        log.warn("Acceso denegado: {} intentó {}", usuario.correo(), accion);
+        throw new AccesoDenegadoException();   // -> 403
     }
 
     // Sesión 7 · @Transactional en el método de servicio: la transacción

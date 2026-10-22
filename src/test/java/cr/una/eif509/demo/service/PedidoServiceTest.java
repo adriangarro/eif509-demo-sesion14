@@ -183,6 +183,15 @@ class PedidoServiceTest {
     }
 
     @Test
+    void paraUnClienteUnClienteIdInexistenteTambienEs403() {
+        when(clientes.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.crear(new CrearPedidoRequest(99L, 1L, 1),
+                new UsuarioActual("ana@mail.com", false)))
+                .isInstanceOf(AccesoDenegadoException.class);
+    }
+
+    @Test
     void unClienteNoPuedeConfirmarElPedidoDeOtro() {
         var pedido = pedidoCon(1, 10);
         when(pedidos.findById(1L)).thenReturn(Optional.of(pedido));
