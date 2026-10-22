@@ -1,0 +1,36 @@
+### Sesión 14 · La venta de un producto (la API en local, perfil dev).
+### Un cliente HTTP envía las peticiones una tras otra: para dos ventas
+### simultáneas, usen el comando con curl del README (paso 5).
+@host = http://localhost:8080
+
+### 1. Iniciar sesión como administrador (operador)
+# @name login
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{"correo": "admin@demo.cr", "clave": "admin123"}
+
+### 2. El producto 1, Teclado mecánico: 10 unidades
+GET {{host}}/api/v1/productos/1
+Authorization: Bearer {{login.response.body.token}}
+
+### 3. Vender 8 unidades (tarda 3 segundos: la pausa del perfil dev)
+POST {{host}}/api/v1/productos/1/ventas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{"cantidad": 8}
+
+### 4. Un cliente no puede vender: 403
+# @name cliente
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{"correo": "cliente@demo.cr", "clave": "cliente123"}
+
+###
+POST {{host}}/api/v1/productos/1/ventas
+Authorization: Bearer {{cliente.response.body.token}}
+Content-Type: application/json
+
+{"cantidad": 1}
