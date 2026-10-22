@@ -4,10 +4,12 @@ import cr.una.eif509.demo.PostgresContainerBase;
 import cr.una.eif509.demo.model.Inventario;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // Sesión 14 · La prueba de la lámina 22: dos operadores, cada uno con su
 // copia del mismo producto, venden 8 unidades de un inventario de 10.
@@ -20,23 +22,25 @@ class ConcurrenciaProductoIT extends PostgresContainerBase {
 
     @Autowired InventarioRepository productos;
 
-    // Versión inicial: verifica que el inventario final sea 2... y lo es.
-    // Pero se vendieron 16 unidades. La prueba pasa y el sistema está mal.
+    // La regla real: si alguien ya modificó el producto, la segunda venta no
+    // puede pasar sin revisar. La primera escritura funciona y la segunda se
+    // rechaza; el inventario final confirma que no se vendió de más.
     @Test
     void segundaActualizacionSimultaneaSeRechaza() {
         Long id = productos.save(new Inventario("Café de la prueba de concurrencia", 10,
                 new BigDecimal("5200.00"))).getId();
 
-        var copiaA = productos.findById(id).orElseThrow();   // operador A lee 10
-        var copiaB = productos.findById(id).orElseThrow();   // operador B lee 10
+        var copiaA = productos.findById(id).orElseThrow();   // operador A lee 10, versión 0
+        var copiaB = productos.findById(id).orElseThrow();   // operador B lee 10, versión 0
 
         copiaA.reservar(8);
-        productos.saveAndFlush(copiaA);   // A guarda: quedan 2
+        productos.saveAndFlush(copiaA);   // versión 0 -> 1
 
-        copiaB.reservar(8);               // B todavía cree que hay 10
-        productos.saveAndFlush(copiaB);   // B guarda: quedan 2
+        copiaB.reservar(8);               // aún tiene versión 0
+        assertThatThrownBy(() -> productos.saveAndFlush(copiaB))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
         assertThat(productos.findById(id).orElseThrow().getDisponible())
-                .isEqualTo(2);
+                .isEqualTo(2);            // no se vendió de más
     }
 }
